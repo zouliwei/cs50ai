@@ -13,6 +13,38 @@ people = {}
 movies = {}
 
 
+def main():
+    if len(sys.argv) > 2:
+        sys.exit("Usage: python degrees.py [directory]")
+    directory = sys.argv[1] if len(sys.argv) == 2 else "large"
+
+    # Load data from files into memory
+    print("Loading data...")
+    load_data(directory)
+    print("Data loaded.")
+
+    source = person_id_for_name(input("Name: "))
+    if source is None:
+        sys.exit("Person not found.")
+    target = person_id_for_name(input("Name: "))
+    if target is None:
+        sys.exit("Person not found.")
+
+    path = shortest_path(source, target)
+
+    if path is None:
+        print("Not connected.")
+    else:
+        degrees = len(path)
+        print(f"{degrees} degrees of separation.")
+        path = [(None, source)] + path
+        for i in range(degrees):
+            person1 = people[path[i][1]]["name"]
+            person2 = people[path[i + 1][1]]["name"]
+            movie = movies[path[i + 1][0]]["title"]
+            print(f"{i + 1}: {person1} and {person2} starred in {movie}")
+
+
 def load_data(directory):
     """
     Load data from CSV files into memory.
@@ -52,69 +84,6 @@ def load_data(directory):
                 pass
 
 
-def main():
-    if len(sys.argv) > 2:
-        sys.exit("Usage: python degrees.py [directory]")
-    directory = sys.argv[1] if len(sys.argv) == 2 else "large"
-
-    # Load data from files into memory
-    print("Loading data...")
-    load_data(directory)
-    print("Data loaded.")
-
-    source = person_id_for_name(input("Name: "))
-    if source is None:
-        sys.exit("Person not found.")
-    target = person_id_for_name(input("Name: "))
-    if target is None:
-        sys.exit("Person not found.")
-
-    path = shortest_path(source, target)
-
-    if path is None:
-        print("Not connected.")
-    else:
-        degrees = len(path)
-        print(f"{degrees} degrees of separation.")
-        path = [(None, source)] + path
-        for i in range(degrees):
-            person1 = people[path[i][1]]["name"]
-            person2 = people[path[i + 1][1]]["name"]
-            movie = movies[path[i + 1][0]]["title"]
-            print(f"{i + 1}: {person1} and {person2} starred in {movie}")
-
-
-def shortest_path(source, target):
-    """
-    Returns the shortest list of (movie_id, person_id) pairs
-    that connect the source to the target.
-
-    If no possible path, returns None.
-    """
-    frontier = QueueFrontier()
-    source_node = Node(source, None, None)
-    frontier.add(source_node)
-    explored = set()
-    while True:
-        if frontier.empty():
-            return None
-        node = frontier.remove()
-        explored.add(node.state)
-
-        if node.state == target:
-            path = []
-            while node.parent is not None:
-                path.append((node.action, node.state))
-                node = node.parent
-            path.reverse()
-            return path
-
-        for movie_id, person_id in neighbors_for_person(node.state):
-            if not frontier.contains_state(person_id) and person_id not in explored:
-                child_node = Node(person_id, node, movie_id)
-                frontier.add(child_node)
-
-
 def person_id_for_name(name):
     """
     Returns the IMDB id for a person's name,
@@ -139,6 +108,47 @@ def person_id_for_name(name):
         return None
     else:
         return person_ids[0]
+
+
+def shortest_path(source, target):
+    """
+    Returns the shortest list of (movie_id, person_id) pairs
+    that connect the source to the target.
+
+    If no possible path, returns None.
+    """
+    frontier = QueueFrontier()
+    frontier.add(Node(source, None, None))
+    explored = set()
+    while not frontier.empty():
+        node = frontier.remove()
+        explored.add(node.state)
+        if node.state == target:
+            return construct_path(node)
+        expand_frontier(node, frontier, explored)
+    return None
+
+
+def construct_path(node):
+    """
+    Constructs the path from the source to the target node.
+    """
+    path = []
+    while node.parent is not None:
+        path.append((node.action, node.state))
+        node = node.parent
+    path.reverse()
+    return path
+
+
+def expand_frontier(node, frontier, explored):
+    """
+    Expands the frontier by adding neighbors of the current node.
+    """
+    for movie_id, person_id in neighbors_for_person(node.state):
+        if not frontier.contains_state(person_id) and person_id not in explored:
+            child_node = Node(person_id, node, movie_id)
+            frontier.add(child_node)
 
 
 def neighbors_for_person(person_id):
